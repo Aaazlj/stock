@@ -36,3 +36,8 @@ STARTING_CASH = _env_float("QFS_STARTING_CASH", 1_000_000.0)
 MAX_SINGLE_WEIGHT = _env_float("QFS_MAX_SINGLE_WEIGHT", 0.10)
 MAX_INDUSTRY_WEIGHT = _env_float("QFS_MAX_INDUSTRY_WEIGHT", 0.30)
 TRADING_DAYS_PER_YEAR = _env_int("QFS_TRADING_DAYS_PER_YEAR", 252)
+
+# AI 配置
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
