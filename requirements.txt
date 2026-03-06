@@ -1,0 +1,12 @@
+pandas
+numpy
+akshare
+scipy
+sqlalchemy
+backtrader
+scikit-learn
+fastapi
+uvicorn
+matplotlib
+plotly
+pyarrow
