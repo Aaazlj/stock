@@ -24,6 +24,51 @@ python -m quant_fund_system.main
 - `GET /strategies`
 - `GET /backtest`
 
+## Docker Compose 启动
+
+1. 复制环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
+2. 按需修改 `.env`。
+
+3. 构建并启动：
+
+```bash
+docker compose up --build -d
+```
+
+4. 查看日志：
+
+```bash
+docker compose logs -f
+```
+
+5. 停止服务：
+
+```bash
+docker compose down
+```
+
+默认会映射 `8000` 端口，并将宿主机 `./data` 挂载到容器 `/app/data` 用于持久化缓存和数据库。
+
+## 环境变量配置说明
+
+支持通过环境变量覆盖默认配置：
+
+| 变量名 | 默认值 | 说明 |
+| --- | --- | --- |
+| `QFS_DATA_DIR` | `quant_fund_system/data_cache` | 数据缓存目录 |
+| `QFS_DB_URL` | `sqlite:///quant_fund.db` | SQLAlchemy 数据库连接串 |
+| `QFS_STARTING_CASH` | `1000000` | 初始资金 |
+| `QFS_MAX_SINGLE_WEIGHT` | `0.10` | 单只股票最大仓位 |
+| `QFS_MAX_INDUSTRY_WEIGHT` | `0.30` | 单行业最大仓位 |
+| `QFS_TRADING_DAYS_PER_YEAR` | `252` | 年化交易日数量 |
+
+> 建议使用 `.env` 管理本地配置（示例见 `.env.example`），避免将敏感信息直接写入代码。
+
 ## 示例策略执行
 
 ```python
