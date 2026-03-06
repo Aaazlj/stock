@@ -8,6 +8,7 @@ A股量化研究与交易系统（工程化示例），包含：
 - 组合优化（等权、风险平价、Markowitz）
 - 模拟交易与风控
 - FastAPI接口与Plotly可视化
+- AI日报/因子分析/风险告警（OpenAI兼容接口）
 
 ## 快速开始
 
@@ -23,6 +24,11 @@ python -m quant_fund_system.main
 - `GET /portfolio`
 - `GET /strategies`
 - `GET /backtest`
+
+AI相关接口：
+- `POST /ai/report/daily`
+- `POST /ai/analyze/factor`
+- `POST /ai/alert/risk`
 
 ## Docker Compose 启动
 
@@ -66,6 +72,9 @@ docker compose down
 | `QFS_MAX_SINGLE_WEIGHT` | `0.10` | 单只股票最大仓位 |
 | `QFS_MAX_INDUSTRY_WEIGHT` | `0.30` | 单行业最大仓位 |
 | `QFS_TRADING_DAYS_PER_YEAR` | `252` | 年化交易日数量 |
+| `OPENAI_API_KEY` | 空 | OpenAI/兼容服务 API Key |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI 兼容接口地址 |
+| `OPENAI_MODEL` | `gpt-4o-mini` | 调用模型名称 |
 
 > 建议使用 `.env` 管理本地配置（示例见 `.env.example`），避免将敏感信息直接写入代码。
 

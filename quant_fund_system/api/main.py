@@ -1,8 +1,12 @@
 """FastAPI 服务。"""
 from __future__ import annotations
 
-from fastapi import FastAPI
+from typing import Any
 
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+
+from quant_fund_system.ai.service import AIService
 from quant_fund_system.config import DATA_DIR
 from quant_fund_system.data.data_fetcher import DataFetcher
 from quant_fund_system.data.data_manager import DataManager
@@ -19,6 +23,26 @@ fetcher = DataFetcher(DATA_DIR)
 manager = DataManager(fetcher)
 trader = PaperTrader()
 scheduler = DailyScheduler(manager, trader)
+ai_service = AIService()
+
+
+class DailyReportRequest(BaseModel):
+    portfolio: dict[str, Any] = Field(default_factory=dict)
+    strategies: dict[str, Any] = Field(default_factory=dict)
+    backtest: dict[str, Any] = Field(default_factory=dict)
+
+
+class FactorAnalyzeRequest(BaseModel):
+    factor_name: str
+    ic: float | None = None
+    quantile_returns: list[dict[str, Any]] = Field(default_factory=list)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class RiskAlertRequest(BaseModel):
+    account: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    breaches: list[str] = Field(default_factory=list)
 
 
 @app.get("/stocks")
@@ -51,3 +75,21 @@ def backtest():
         "sharpe": bt.sharpe,
         "calmar": bt.calmar,
     }
+
+
+@app.post("/ai/report/daily")
+def ai_daily_report(req: DailyReportRequest):
+    report = ai_service.generate_daily_report(req.model_dump())
+    return {"report": report}
+
+
+@app.post("/ai/analyze/factor")
+def ai_factor_report(req: FactorAnalyzeRequest):
+    report = ai_service.analyze_factor(req.model_dump())
+    return {"report": report}
+
+
+@app.post("/ai/alert/risk")
+def ai_risk_alert(req: RiskAlertRequest):
+    report = ai_service.generate_risk_alert(req.model_dump())
+    return {"report": report}
