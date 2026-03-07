@@ -46,15 +46,57 @@ class DataFetcher:
             df = self._offline_stock_list()
         else:
             try:
-                spot = ak.stock_zh_a_spot_em()
-                cols = {"代码": "code", "名称": "name", "行业": "industry"}
-                df = spot[list(cols.keys())].rename(columns=cols)
+                df = self._fetch_stock_list_from_ak()
             except Exception as exc:  # pragma: no cover
                 logging.warning("拉取股票列表失败，使用本地缓存/离线样例: %s", exc)
                 df = cached if cached is not None else self._offline_stock_list()
 
+        df = self._normalize_stock_list(df)
         self._write_cache(cache_key, df)
         return df
+
+    def _fetch_stock_list_from_ak(self) -> pd.DataFrame:
+        """优先使用实时行情接口，失败后回退到代码名称接口。"""
+        errors: list[str] = []
+        for fn_name in ("stock_zh_a_spot_em", "stock_info_a_code_name"):
+            fn = getattr(ak, fn_name, None)
+            if fn is None:
+                continue
+            try:
+                df = fn()
+                if isinstance(df, pd.DataFrame) and not df.empty:
+                    return df
+            except Exception as exc:  # pragma: no cover
+                errors.append(f"{fn_name}: {exc}")
+
+        raise RuntimeError("; ".join(errors) if errors else "未找到可用的 AkShare 股票列表接口")
+
+    @staticmethod
+    def _normalize_stock_list(df: pd.DataFrame) -> pd.DataFrame:
+        """兼容不同接口字段，统一为 code/name/industry。"""
+        column_candidates = {
+            "code": ["代码", "证券代码", "code"],
+            "name": ["名称", "证券简称", "name"],
+            "industry": ["行业", "所属行业", "industry"],
+        }
+
+        selected_cols: dict[str, str] = {}
+        for standard_col, candidates in column_candidates.items():
+            for source_col in candidates:
+                if source_col in df.columns:
+                    selected_cols[source_col] = standard_col
+                    break
+
+        normalized = df[list(selected_cols.keys())].rename(columns=selected_cols).copy()
+        if "industry" not in normalized.columns:
+            normalized["industry"] = "未知"
+
+        normalized["code"] = normalized["code"].astype(str).str.extract(r"(\d{6})", expand=False)
+        normalized = normalized.dropna(subset=["code", "name"]).drop_duplicates(subset=["code"])
+        normalized["code"] = normalized["code"].str.zfill(6)
+        normalized["name"] = normalized["name"].astype(str)
+        normalized["industry"] = normalized["industry"].fillna("未知").astype(str)
+        return normalized[["code", "name", "industry"]].reset_index(drop=True)
 
     def get_price_history(self, symbol: str, start_date: str = "20180101", end_date: str = "20991231") -> pd.DataFrame:
         """获取日线行情。"""
