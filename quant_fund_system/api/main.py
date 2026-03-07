@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any
 from pathlib import Path
 
+import pandas as pd
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -112,6 +114,30 @@ def ai_factor_report(req: FactorAnalyzeRequest):
 def ai_risk_alert(req: RiskAlertRequest):
     report = ai_service.generate_risk_alert(req.model_dump())
     return {"report": report}
+
+
+@app.get("/api/stock/{code}/history")
+def get_stock_history(code: str):
+    try:
+        df = fetcher.get_price_history(code)
+        if df.empty:
+            return {"status": "error", "message": "No data found"}
+        # 转换为易于前端展示的格式
+        # ECharts 期望格式通常为 [date, open, close, low, high, volume]
+        history_data = []
+        for _, row in df.iterrows():
+            date_str = pd.to_datetime(row["date"]).strftime("%Y-%m-%d")
+            history_data.append({
+                "date": date_str,
+                "values": [row["open"], row["close"], row["low"], row["high"]],
+                "volume": int(row["volume"])
+            })
+        return {
+            "status": "success",
+            "data": history_data
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.get("/")

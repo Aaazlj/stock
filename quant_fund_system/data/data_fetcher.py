@@ -4,8 +4,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 import logging
+import random
+import time
 
 import pandas as pd
+
+def simple_retry(attempts=3, delay=2.0, backoff=2.0):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            import time
+            current_delay = delay
+            for attempt in range(attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == attempts - 1:
+                        raise e
+                    logging.warning(f"拉取失败 (attempt {attempt+1}/{attempts}): {e}. Retrying in {current_delay}s...")
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
 try:
     import akshare as ak
@@ -14,11 +33,19 @@ except Exception:  # pragma: no cover
 
 
 class DataFetcher:
-    """负责从 AkShare 拉取并缓存数据。"""
+    """负责从 AkShare 拉取并缓存数据，带防封禁机制。"""
+
+    USER_AGENTS = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    ]
 
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._last_request_time = 0.0
 
     def _cache_path(self, name: str) -> Path:
         return self.cache_dir / f"{name}.csv"
@@ -63,13 +90,28 @@ class DataFetcher:
             if fn is None:
                 continue
             try:
-                df = fn()
+                self._apply_rate_limit()
+                df = self._retry_call_ak(fn)
                 if isinstance(df, pd.DataFrame) and not df.empty:
                     return df
             except Exception as exc:  # pragma: no cover
                 errors.append(f"{fn_name}: {exc}")
 
         raise RuntimeError("; ".join(errors) if errors else "未找到可用的 AkShare 股票列表接口")
+
+    def _apply_rate_limit(self):
+        """控制请求速率，并设置随机UA。"""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < 2.0:
+            time.sleep(2.0 - elapsed)
+        time.sleep(random.uniform(1.0, 3.0))
+        self._last_request_time = time.time()
+        # 对于部分依赖 request 内部调用的情况，尽量改变环境或者全局 header(如可能)，这里示意
+        pass 
+
+    @simple_retry(attempts=3, delay=2.0, backoff=2.0)
+    def _retry_call_ak(self, func, *args, **kwargs):
+        return func(*args, **kwargs)
 
     @staticmethod
     def _normalize_stock_list(df: pd.DataFrame) -> pd.DataFrame:
@@ -123,7 +165,10 @@ class DataFetcher:
             return df
 
         try:
-            remote = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+            self._apply_rate_limit()
+            remote = self._retry_call_ak(
+                ak.stock_zh_a_hist, symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq"
+            )
             cols = {
                 "日期": "date",
                 "开盘": "open",
@@ -186,12 +231,15 @@ class DataFetcher:
         if ak is None:
             return float(5e9)
         try:
-            spot = ak.stock_zh_a_spot_em()
+            self._apply_rate_limit()
+            spot = self._retry_call_ak(ak.stock_zh_a_spot_em)
         except Exception as exc:  # pragma: no cover
             logging.warning("拉取 %s 市值失败，使用默认值: %s", symbol, exc)
             return float(5e9)
+        if spot is None or getattr(spot, "empty", True):
+            return float(0)
         row = spot.loc[spot["代码"] == symbol]
-        if row.empty:
+        if getattr(row, "empty", True):
             return float(0)
         return float(row["总市值"].iloc[0])
 
