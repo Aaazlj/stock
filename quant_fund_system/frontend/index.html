@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A股量化系统看板</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background:#f6f8fb; color:#222; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .header { display:flex; justify-content:space-between; align-items:center; }
+    .card { background:#fff; border-radius:10px; padding:16px; box-shadow:0 2px 12px rgba(0,0,0,.08); margin-top:16px; }
+    table { width:100%; border-collapse: collapse; font-size:14px; }
+    th, td { border-bottom:1px solid #eee; padding:10px; text-align:left; }
+    .muted { color:#666; }
+    .tag { background:#eef4ff; color:#245; padding:4px 10px; border-radius:999px; font-size:12px; }
+    button { border:none; background:#2f6cf6; color:#fff; border-radius:6px; padding:8px 12px; cursor:pointer; }
+  </style>
+</head>
+<body>
+<div id="app" class="container">
+  <div class="header">
+    <div>
+      <h1>A股量化可视化看板</h1>
+      <p class="muted">股票列表、行业分布与策略接口概览</p>
+    </div>
+    <button @click="loadData">刷新数据</button>
+  </div>
+
+  <div class="card">
+    <h3>股票概览 <span class="tag">前100只</span></h3>
+    <p class="muted">总数：{{ summary.total || 0 }}</p>
+    <canvas id="industryChart" height="120"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>股票列表</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>代码</th><th>名称</th><th>行业</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in stocks" :key="item.code">
+          <td>{{ item.code }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.industry }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const { createApp, nextTick } = Vue
+createApp({
+  data() {
+    return {
+      stocks: [],
+      summary: { total: 0, top_industries: [] },
+      chart: null,
+    }
+  },
+  methods: {
+    async loadData() {
+      const [stocksRes, summaryRes] = await Promise.all([
+        fetch('/stocks'),
+        fetch('/stocks/summary'),
+      ])
+      this.stocks = await stocksRes.json()
+      this.summary = await summaryRes.json()
+      await nextTick()
+      this.renderChart()
+    },
+    renderChart() {
+      const labels = this.summary.top_industries.map(i => i.industry)
+      const values = this.summary.top_industries.map(i => i.count)
+      const ctx = document.getElementById('industryChart')
+      if (this.chart) this.chart.destroy()
+      this.chart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: '股票数量', data: values, backgroundColor: '#5b8ff9' }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      })
+    }
+  },
+  mounted() {
+    this.loadData()
+  }
+}).mount('#app')
+</script>
+</body>
+</html>

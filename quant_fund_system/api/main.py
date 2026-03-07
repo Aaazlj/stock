@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from quant_fund_system.ai.service import AIService
@@ -18,6 +21,10 @@ from quant_fund_system.database.models import Base
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="A股量化研究与交易系统")
+
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if frontend_dir.exists():
+    app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
 
 fetcher = DataFetcher(DATA_DIR)
 manager = DataManager(fetcher)
@@ -48,6 +55,18 @@ class RiskAlertRequest(BaseModel):
 @app.get("/stocks")
 def stocks():
     return fetcher.get_stock_list().head(100).to_dict(orient="records")
+
+
+@app.get("/stocks/summary")
+def stocks_summary():
+    stock_df = fetcher.get_stock_list().head(100)
+    industry_counts = (
+        stock_df["industry"].fillna("未知").value_counts().head(10).rename_axis("industry").reset_index(name="count")
+    )
+    return {
+        "total": int(stock_df.shape[0]),
+        "top_industries": industry_counts.to_dict(orient="records"),
+    }
 
 
 @app.get("/portfolio")
@@ -93,3 +112,11 @@ def ai_factor_report(req: FactorAnalyzeRequest):
 def ai_risk_alert(req: RiskAlertRequest):
     report = ai_service.generate_risk_alert(req.model_dump())
     return {"report": report}
+
+
+@app.get("/")
+def index():
+    index_file = frontend_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return {"message": "Frontend not found", "hint": "请访问 API 文档 /docs"}

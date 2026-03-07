@@ -20,6 +20,7 @@ python -m quant_fund_system.main
 ```
 
 启动后访问：
+- `GET /`（Vue可视化看板）
 - `GET /stocks`
 - `GET /portfolio`
 - `GET /strategies`
